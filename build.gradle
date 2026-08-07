@@ -1,0 +1,23 @@
+buildscript {
+    repositories {
+        flatDir { dirs '/usr/share/java' }
+    }
+    dependencies {
+        classpath fileTree(dir: '/usr/share/java', include: ['*.jar'])
+    }
+}
+
+apply plugin: 'com.android.application'
+
+android {
+    compileSdkVersion 23
+    buildToolsVersion "29.0.3"
+    
+    defaultConfig {
+        applicationId "com.mrx.batteryguard"
+        minSdkVersion 23
+        targetSdkVersion 23
+        versionCode 1
+        versionName "1.0"
+    }
+}
