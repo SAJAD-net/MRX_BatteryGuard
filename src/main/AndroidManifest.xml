@@ -5,17 +5,16 @@
     android:versionName="1.0">
 
     <uses-sdk android:minSdkVersion="23" android:targetSdkVersion="29"/>
-    
     <uses-permission android:name="android.permission.VIBRATE"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 
     <application
-        android:label="BatteryGuard"
-        android:icon="@drawable/ic_launcher"
+        android:label="MRX BatteryGuard"
+        android:icon="@drawable/icon"
         android:theme="@android:style/Theme.Material.Light"
         android:supportsRtl="true">
         <activity android:name=".MainActivity"
-            android:label="BatteryGuard"
+            android:label="MRX BatteryGuard"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
