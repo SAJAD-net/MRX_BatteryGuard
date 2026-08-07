@@ -9,3 +9,7 @@ build/
 local.properties
 .idea/
 *.iml
+javac.*.args
+local.properties
+.gradle/
+build/
