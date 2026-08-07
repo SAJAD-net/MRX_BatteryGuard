@@ -22,12 +22,10 @@ import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
-import android.widget.CompoundButton;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.SeekBar;
 import android.widget.TextView;
-import android.widget.ToggleButton;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
@@ -35,18 +33,15 @@ import java.util.List;
 import java.util.Locale;
 
 public class MainActivity extends Activity {
-    private TextView batteryPercent, chargingStatus, limitText, lastChargeText;
+    private TextView batteryPercent, chargingStatus, limitText, lastChargeText, alarmStatusText;
     private SeekBar limitSeekBar;
-    private ToggleButton alarmToggle, themeToggle;
-    private LinearLayout mainContainer, tabContent, homeTab, historyTab, settingsTab;
-    private LinearLayout tempCard, avgCard, historyContainer;
-    private Button tabHome, tabHistory, tabSettings;
-    private int chargingLimit = 80;
+    private LinearLayout homeContent, historyContent, graphBar;
+    private Button tabHome, tabHistory;
     private boolean alarmEnabled = true;
-    private boolean alarmTriggered = false;
-    private boolean isDarkTheme = true;
+    private int chargingLimit = 80;
     private int currentLevel = 0;
     private boolean isCharging = false;
+    private int previousLevel = -1;
     private List history = new ArrayList();
     private List levelHistory = new ArrayList();
     private SimpleDateFormat sdf = new SimpleDateFormat("HH:mm:ss", Locale.getDefault());
@@ -55,291 +50,234 @@ public class MainActivity extends Activity {
     private Ringtone ringtone;
     private boolean alarmActive = false;
 
-    private int bgColor, surfaceColor, primaryColor, textColor, textSecondary, accentColor;
-    private int cardBg, cardBorder;
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        prefs = getSharedPreferences("batteryguard", MODE_PRIVATE);
+        prefs = getSharedPreferences("bg", MODE_PRIVATE);
         chargingLimit = prefs.getInt("limit", 80);
         alarmEnabled = prefs.getBoolean("alarm", true);
-        isDarkTheme = prefs.getBoolean("dark", true);
         vibrator = (Vibrator) getSystemService(VIBRATOR_SERVICE);
-        
-        applyTheme();
         setContentView(createRootUI());
         registerBatteryReceiver();
         switchTab(0);
     }
 
-    private void applyTheme() {
-        if (isDarkTheme) {
-            bgColor = Color.parseColor("#0a0a1a");
-            surfaceColor = Color.parseColor("#1a1a2e");
-            primaryColor = Color.parseColor("#00d4aa");
-            textColor = Color.parseColor("#e0e0e0");
-            textSecondary = Color.parseColor("#8888aa");
-            accentColor = Color.parseColor("#ffd700");
-            cardBg = Color.parseColor("#1a1a2e");
-            cardBorder = Color.parseColor("#2a2a4a");
-        } else {
-            bgColor = Color.parseColor("#f5f7fa");
-            surfaceColor = Color.parseColor("#ffffff");
-            primaryColor = Color.parseColor("#00897b");
-            textColor = Color.parseColor("#1a1a2e");
-            textSecondary = Color.parseColor("#666677");
-            accentColor = Color.parseColor("#ff8f00");
-            cardBg = Color.parseColor("#ffffff");
-            cardBorder = Color.parseColor("#e0e0e0");
-        }
-    }
-
     private View createRootUI() {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(bgColor);
+        root.setBackgroundColor(Color.parseColor("#0a0a0f"));
 
-        // Top bar
-        LinearLayout topBar = new LinearLayout(this);
-        topBar.setOrientation(LinearLayout.VERTICAL);
-        topBar.setGravity(Gravity.CENTER);
-        topBar.setPadding(0, 40, 0, 15);
-        topBar.setBackgroundColor(surfaceColor);
+        // HEADER
+        LinearLayout header = new LinearLayout(this);
+        header.setOrientation(LinearLayout.HORIZONTAL);
+        header.setGravity(Gravity.CENTER);
+        header.setPadding(0, 45, 0, 18);
+        header.setBackgroundColor(Color.parseColor("#0a0a0f"));
+        TextView mrx = new TextView(this);
+        mrx.setText("MRX"); mrx.setTextSize(26); mrx.setTextColor(Color.parseColor("#ff2244")); mrx.setTypeface(Typeface.DEFAULT_BOLD);
+        header.addView(mrx);
+        TextView rest = new TextView(this);
+        rest.setText(" BatteryGuard"); rest.setTextSize(26); rest.setTextColor(Color.parseColor("#00ff88")); rest.setTypeface(Typeface.DEFAULT_BOLD);
+        header.addView(rest);
+        root.addView(header);
 
-        TextView iconView = new TextView(this);
-        iconView.setText("\u26A1");
-        iconView.setTextSize(36);
-        iconView.setGravity(Gravity.CENTER);
-        topBar.addView(iconView);
+        // CONTENT AREA
+        LinearLayout contentArea = new LinearLayout(this);
+        contentArea.setOrientation(LinearLayout.VERTICAL);
+        contentArea.setLayoutParams(new LinearLayout.LayoutParams(-1, 0, 1f));
+        root.addView(contentArea);
 
-        TextView titleText = new TextView(this);
-        titleText.setText("MRX BatteryGuard");
-        titleText.setTextSize(22);
-        titleText.setTextColor(primaryColor);
-        titleText.setTypeface(Typeface.DEFAULT_BOLD);
-        titleText.setGravity(Gravity.CENTER);
-        topBar.addView(titleText);
+        homeContent = createHomeTab();
+        historyContent = createHistoryTab();
 
-        root.addView(topBar);
+        // ABOUT - fixed at bottom above tabs
+        LinearLayout aboutBar = new LinearLayout(this);
+        aboutBar.setOrientation(LinearLayout.VERTICAL);
+        aboutBar.setGravity(Gravity.CENTER);
+        aboutBar.setBackgroundColor(Color.parseColor("#0a0a0f"));
+        aboutBar.setPadding(0, 12, 0, 0);
 
-        // Tab content area
-        tabContent = new LinearLayout(this);
-        tabContent.setOrientation(LinearLayout.VERTICAL);
-        tabContent.setLayoutParams(new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
-        root.addView(tabContent);
+        View line = new View(this);
+        line.setLayoutParams(new LinearLayout.LayoutParams(-1, 1));
+        line.setBackgroundColor(Color.parseColor("#1a3a2a"));
+        aboutBar.addView(line);
 
-        // Create tabs
-        homeTab = createHomeTab();
-        historyTab = createHistoryTab();
-        settingsTab = createSettingsTab();
+        TextView aboutMrx = new TextView(this);
+        aboutMrx.setText("MRX BatteryGuard");
+        aboutMrx.setTextSize(12);
+        aboutMrx.setTextColor(Color.parseColor("#558866"));
+        aboutMrx.setGravity(Gravity.CENTER);
+        aboutBar.addView(aboutMrx);
 
-        // Bottom tabs
-        LinearLayout bottomTabs = new LinearLayout(this);
-        bottomTabs.setOrientation(LinearLayout.HORIZONTAL);
-        bottomTabs.setBackgroundColor(surfaceColor);
-        bottomTabs.setPadding(0, 10, 0, 20);
-        bottomTabs.setGravity(Gravity.CENTER);
+        TextView aboutBy = new TextView(this);
+        aboutBy.setText("by Sajad Chehrazi");
+        aboutBy.setTextSize(11);
+        aboutBy.setTextColor(Color.parseColor("#ff2244"));
+        aboutBy.setTypeface(Typeface.DEFAULT_BOLD);
+        aboutBy.setGravity(Gravity.CENTER);
+        aboutBy.setPadding(0, 2, 0, 8);
+        aboutBar.addView(aboutBy);
+        root.addView(aboutBar);
 
-        tabHome = tabButton("Home", true);
-        tabHome.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) { switchTab(0); }
-        });
-        bottomTabs.addView(tabHome);
+        // BOTTOM TABS
+        LinearLayout tabs = new LinearLayout(this);
+        tabs.setOrientation(LinearLayout.HORIZONTAL);
+        tabs.setBackgroundColor(Color.parseColor("#0a0a0f"));
+        tabs.setPadding(0, 6, 0, 20);
+        tabs.setGravity(Gravity.CENTER);
 
-        tabHistory = tabButton("History", false);
-        tabHistory.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) { switchTab(1); }
-        });
-        bottomTabs.addView(tabHistory);
+        tabHome = makeTab("[ HOME ]");
+        tabHome.setOnClickListener(new View.OnClickListener() { public void onClick(View v) { switchTab(0); } });
+        tabs.addView(tabHome);
+        tabHistory = makeTab("[ HISTORY ]");
+        tabHistory.setOnClickListener(new View.OnClickListener() { public void onClick(View v) { switchTab(1); } });
+        tabs.addView(tabHistory);
+        root.addView(tabs);
 
-        tabSettings = tabButton("Settings", false);
-        tabSettings.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) { switchTab(2); }
-        });
-        bottomTabs.addView(tabSettings);
-
-        root.addView(bottomTabs);
         return root;
     }
 
-    private Button tabButton(String text, boolean active) {
-        Button btn = new Button(this);
-        btn.setText(text);
-        btn.setTextSize(13);
-        btn.setTextColor(active ? primaryColor : textSecondary);
-        btn.setTypeface(null, active ? Typeface.BOLD : Typeface.NORMAL);
-        btn.setBackgroundColor(Color.TRANSPARENT);
-        btn.setPadding(20, 12, 20, 12);
-        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-        btn.setLayoutParams(p);
-        return btn;
+    private Button makeTab(String t) {
+        Button b = new Button(this);
+        b.setText(t); b.setTextSize(12); b.setTypeface(Typeface.MONOSPACE);
+        b.setTextColor(Color.parseColor("#335544")); b.setBackgroundColor(Color.TRANSPARENT);
+        b.setPadding(20, 10, 20, 10);
+        b.setLayoutParams(new LinearLayout.LayoutParams(0, -2, 1f));
+        return b;
     }
 
-    private void switchTab(int tab) {
-        tabContent.removeAllViews();
-        tabHome.setTextColor(tab == 0 ? primaryColor : textSecondary);
-        tabHome.setTypeface(null, tab == 0 ? Typeface.BOLD : Typeface.NORMAL);
-        tabHistory.setTextColor(tab == 1 ? primaryColor : textSecondary);
-        tabHistory.setTypeface(null, tab == 1 ? Typeface.BOLD : Typeface.NORMAL);
-        tabSettings.setTextColor(tab == 2 ? primaryColor : textSecondary);
-        tabSettings.setTypeface(null, tab == 2 ? Typeface.BOLD : Typeface.NORMAL);
-
-        if (tab == 0) tabContent.addView(homeTab);
-        else if (tab == 1) {
-            refreshHistoryTab();
-            tabContent.addView(historyTab);
+    private void switchTab(int n) {
+        View root = (View) tabHome.getParent().getParent();
+        LinearLayout contentArea = null;
+        if (root instanceof LinearLayout) {
+            contentArea = (LinearLayout) ((LinearLayout) root).getChildAt(1);
         }
-        else tabContent.addView(settingsTab);
+        if (contentArea == null) return;
+        contentArea.removeAllViews();
+        tabHome.setTextColor(n == 0 ? Color.parseColor("#00ff88") : Color.parseColor("#335544"));
+        tabHistory.setTextColor(n == 1 ? Color.parseColor("#00ff88") : Color.parseColor("#335544"));
+        if (n == 0) contentArea.addView(homeContent);
+        else { refreshHistoryTab(); contentArea.addView(historyContent); }
     }
 
     private LinearLayout createHomeTab() {
         ScrollView sv = new ScrollView(this);
         LinearLayout home = new LinearLayout(this);
         home.setOrientation(LinearLayout.VERTICAL);
-        home.setPadding(20, 20, 20, 20);
-        home.setBackgroundColor(bgColor);
+        home.setPadding(25, 20, 25, 20);
+        home.setBackgroundColor(Color.parseColor("#0a0a0f"));
+        home.setGravity(Gravity.CENTER_HORIZONTAL);
 
-        // Battery circle
-        LinearLayout circleContainer = new LinearLayout(this);
-        circleContainer.setGravity(Gravity.CENTER);
-        circleContainer.setPadding(0, 10, 0, 10);
-
-        GradientDrawable circleBg = new GradientDrawable();
-        circleBg.setShape(GradientDrawable.OVAL);
-        circleBg.setColor(cardBg);
-        circleBg.setStroke(4, primaryColor);
-        circleBg.setSize(200, 200);
-
+        // Battery Circle
+        GradientDrawable circle = new GradientDrawable();
+        circle.setShape(GradientDrawable.OVAL);
+        circle.setColor(Color.parseColor("#0d0d18"));
+        circle.setStroke(5, Color.parseColor("#00ff88"));
+        circle.setSize(200, 200);
         LinearLayout circleInner = new LinearLayout(this);
         circleInner.setOrientation(LinearLayout.VERTICAL);
         circleInner.setGravity(Gravity.CENTER);
-        circleInner.setBackground(circleBg);
+        circleInner.setBackground(circle);
         circleInner.setLayoutParams(new LinearLayout.LayoutParams(200, 200));
-
         batteryPercent = new TextView(this);
-        batteryPercent.setText("--%");
-        batteryPercent.setTextSize(48);
-        batteryPercent.setTextColor(primaryColor);
-        batteryPercent.setTypeface(Typeface.DEFAULT_BOLD);
-        batteryPercent.setGravity(Gravity.CENTER);
+        batteryPercent.setText("--%"); batteryPercent.setTextSize(50); batteryPercent.setTextColor(Color.parseColor("#00ff88"));
+        batteryPercent.setTypeface(Typeface.DEFAULT_BOLD); batteryPercent.setGravity(Gravity.CENTER);
         circleInner.addView(batteryPercent);
-
         chargingStatus = new TextView(this);
-        chargingStatus.setText("Waiting...");
-        chargingStatus.setTextSize(13);
-        chargingStatus.setTextColor(textSecondary);
-        chargingStatus.setGravity(Gravity.CENTER);
+        chargingStatus.setText("..."); chargingStatus.setTextSize(12); chargingStatus.setTextColor(Color.parseColor("#558866"));
+        chargingStatus.setGravity(Gravity.CENTER); chargingStatus.setPadding(0, 4, 0, 0);
         circleInner.addView(chargingStatus);
+        LinearLayout circleWrap = new LinearLayout(this);
+        circleWrap.setGravity(Gravity.CENTER); circleWrap.setPadding(0, 0, 0, 20);
+        circleWrap.addView(circleInner);
+        home.addView(circleWrap);
 
-        circleContainer.addView(circleInner);
-        home.addView(circleContainer);
+        // Alarm pill
+        GradientDrawable pillBg = new GradientDrawable();
+        pillBg.setColor(alarmEnabled ? Color.parseColor("#00ff88") : Color.parseColor("#1a1a2e"));
+        pillBg.setCornerRadius(40); pillBg.setStroke(2, Color.parseColor("#00ff88"));
+        LinearLayout pill = new LinearLayout(this);
+        pill.setOrientation(LinearLayout.HORIZONTAL); pill.setGravity(Gravity.CENTER);
+        pill.setBackground(pillBg); pill.setPadding(35, 14, 35, 14);
+        pill.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) { alarmEnabled = !alarmEnabled; updateAlarmPill(); saveSettings(); }
+        });
+        alarmStatusText = new TextView(this);
+        alarmStatusText.setText(alarmEnabled ? "🔔 ALARM ON" : "🔕 ALARM OFF");
+        alarmStatusText.setTextSize(14); alarmStatusText.setTextColor(Color.parseColor("#0a0a0f"));
+        alarmStatusText.setTypeface(Typeface.DEFAULT_BOLD);
+        pill.addView(alarmStatusText);
+        LinearLayout pillWrap = new LinearLayout(this);
+        pillWrap.setGravity(Gravity.CENTER); pillWrap.setPadding(0, 0, 0, 22);
+        pillWrap.addView(pill);
+        home.addView(pillWrap);
 
-        // Alarm target
-        home.addView(sectionLabel("Alarm Target"));
-        LinearLayout limitSection = card();
+        // Target
+        TextView targetLabel = new TextView(this);
+        targetLabel.setText("TARGET CHARGE"); targetLabel.setTextSize(10);
+        targetLabel.setTextColor(Color.parseColor("#335544")); targetLabel.setTypeface(Typeface.DEFAULT_BOLD);
+        targetLabel.setGravity(Gravity.CENTER);
+        home.addView(targetLabel);
+
         LinearLayout limitRow = new LinearLayout(this);
-        limitRow.setOrientation(LinearLayout.HORIZONTAL);
-        limitRow.setGravity(Gravity.CENTER);
-
-        Button minusBtn = smallBtn("-");
+        limitRow.setOrientation(LinearLayout.HORIZONTAL); limitRow.setGravity(Gravity.CENTER); limitRow.setPadding(0, 5, 0, 5);
+        Button minusBtn = circleBtn("-");
         minusBtn.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) {
-                chargingLimit = Math.max(10, chargingLimit - 5);
-                limitSeekBar.setProgress(chargingLimit - 10);
-                limitText.setText(chargingLimit + "%");
-                saveSettings();
-            }
+            public void onClick(View v) { chargingLimit = Math.max(10, chargingLimit - 5); limitSeekBar.setProgress(chargingLimit - 10); limitText.setText(chargingLimit + "%"); saveSettings(); }
         });
         limitRow.addView(minusBtn);
-
         limitText = new TextView(this);
-        limitText.setText(chargingLimit + "%");
-        limitText.setTextSize(36);
-        limitText.setTextColor(primaryColor);
-        limitText.setTypeface(Typeface.DEFAULT_BOLD);
-        limitText.setGravity(Gravity.CENTER);
-        limitText.setPadding(15, 0, 15, 0);
+        limitText.setText(chargingLimit + "%"); limitText.setTextSize(38); limitText.setTextColor(Color.parseColor("#00ff88"));
+        limitText.setTypeface(Typeface.DEFAULT_BOLD); limitText.setGravity(Gravity.CENTER); limitText.setPadding(20, 0, 20, 0);
         limitRow.addView(limitText);
-
-        Button plusBtn = smallBtn("+");
+        Button plusBtn = circleBtn("+");
         plusBtn.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) {
-                chargingLimit = Math.min(100, chargingLimit + 5);
-                limitSeekBar.setProgress(chargingLimit - 10);
-                limitText.setText(chargingLimit + "%");
-                saveSettings();
-            }
+            public void onClick(View v) { chargingLimit = Math.min(100, chargingLimit + 5); limitSeekBar.setProgress(chargingLimit - 10); limitText.setText(chargingLimit + "%"); saveSettings(); }
         });
         limitRow.addView(plusBtn);
-        limitSection.addView(limitRow);
+        home.addView(limitRow);
 
         limitSeekBar = new SeekBar(this);
-        limitSeekBar.setMax(90);
-        limitSeekBar.setProgress(chargingLimit - 10);
+        limitSeekBar.setMax(90); limitSeekBar.setProgress(chargingLimit - 10); limitSeekBar.setPadding(30, 0, 30, 0);
         limitSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            public void onProgressChanged(SeekBar s, int p, boolean u) {
-                chargingLimit = p + 10;
-                limitText.setText(chargingLimit + "%");
-            }
+            public void onProgressChanged(SeekBar s, int p, boolean u) { chargingLimit = p + 10; limitText.setText(chargingLimit + "%"); }
             public void onStartTrackingTouch(SeekBar s) {}
             public void onStopTrackingTouch(SeekBar s) { saveSettings(); }
         });
-        limitSection.addView(limitSeekBar);
-        home.addView(limitSection);
+        home.addView(limitSeekBar);
 
-        // Presets (removed 90%)
+        // Presets
         LinearLayout presets = new LinearLayout(this);
-        presets.setOrientation(LinearLayout.HORIZONTAL);
-        presets.setGravity(Gravity.CENTER);
-        int[] vals = {50, 60, 70, 80, 100};
+        presets.setOrientation(LinearLayout.HORIZONTAL); presets.setGravity(Gravity.CENTER); presets.setPadding(0, 10, 0, 15);
+        int[] vals = {50, 60, 70, 80};
         for (int i = 0; i < vals.length; i++) {
             final int v = vals[i];
             Button b = new Button(this);
-            b.setText(v + "%");
-            b.setTextSize(11);
-            b.setTextColor(textSecondary);
-            b.setBackgroundColor(cardBg);
+            b.setText(v + "%"); b.setTextSize(12); b.setTextColor(Color.parseColor("#558866")); b.setBackgroundColor(Color.parseColor("#0d0d18")); b.setPadding(14, 8, 14, 8);
             b.setOnClickListener(new View.OnClickListener() {
-                public void onClick(View v2) {
-                    chargingLimit = v;
-                    limitSeekBar.setProgress(v - 10);
-                    limitText.setText(v + "%");
-                    saveSettings();
-                }
+                public void onClick(View v2) { chargingLimit = v; limitSeekBar.setProgress(v - 10); limitText.setText(v + "%"); saveSettings(); }
             });
             presets.addView(b);
         }
         home.addView(presets);
 
-        // Stats
-        home.addView(sectionLabel("Statistics"));
-        LinearLayout stats = new LinearLayout(this);
-        stats.setOrientation(LinearLayout.HORIZONTAL);
-        tempCard = statCard("Temperature", "--°C");
-        avgCard = statCard("Average", "--%");
-        stats.addView(tempCard);
-        stats.addView(avgCard);
-        home.addView(stats);
-
         lastChargeText = new TextView(this);
-        lastChargeText.setText("Last update: --");
-        lastChargeText.setTextSize(11);
-        lastChargeText.setTextColor(textSecondary);
-        lastChargeText.setGravity(Gravity.CENTER);
-        lastChargeText.setPadding(0, 8, 0, 8);
+        lastChargeText.setText("--°C"); lastChargeText.setTextSize(13); lastChargeText.setTextColor(Color.parseColor("#558866"));
+        lastChargeText.setGravity(Gravity.CENTER); lastChargeText.setPadding(0, 0, 0, 15);
         home.addView(lastChargeText);
 
-        // Stop alarm button
-        Button stopAlarmBtn = bigButton("Stop Alarm", "#ff4757");
-        stopAlarmBtn.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) { stopAlarm(); }
-        });
-        home.addView(stopAlarmBtn);
+        Button stopBtn = new Button(this);
+        stopBtn.setText("STOP ALARM"); stopBtn.setTextSize(14); stopBtn.setTextColor(Color.WHITE); stopBtn.setTypeface(Typeface.DEFAULT_BOLD);
+        GradientDrawable stopBg = new GradientDrawable();
+        stopBg.setColor(Color.parseColor("#ff3344")); stopBg.setCornerRadius(25);
+        stopBtn.setBackground(stopBg); stopBtn.setPadding(0, 14, 0, 14);
+        stopBtn.setLayoutParams(new LinearLayout.LayoutParams(-1, -2));
+        stopBtn.setOnClickListener(new View.OnClickListener() { public void onClick(View v) { stopAlarm(); } });
+        home.addView(stopBtn);
 
         sv.addView(home);
         LinearLayout wrapper = new LinearLayout(this);
+        wrapper.setGravity(Gravity.CENTER_HORIZONTAL);
         wrapper.addView(sv);
         return wrapper;
     }
@@ -347,241 +285,100 @@ public class MainActivity extends Activity {
     private LinearLayout createHistoryTab() {
         ScrollView sv = new ScrollView(this);
         LinearLayout hist = new LinearLayout(this);
-        hist.setOrientation(LinearLayout.VERTICAL);
-        hist.setPadding(20, 20, 20, 20);
-        hist.setBackgroundColor(bgColor);
-
+        hist.setOrientation(LinearLayout.VERTICAL); hist.setPadding(20, 20, 20, 20);
+        hist.setBackgroundColor(Color.parseColor("#0a0a0f")); hist.setGravity(Gravity.CENTER_HORIZONTAL);
         TextView title = new TextView(this);
-        title.setText("Charging History");
-        title.setTextSize(20);
-        title.setTextColor(primaryColor);
-        title.setTypeface(Typeface.DEFAULT_BOLD);
-        title.setGravity(Gravity.CENTER);
-        title.setPadding(0, 0, 0, 20);
+        title.setText("CHARGING HISTORY"); title.setTextSize(14); title.setTextColor(Color.parseColor("#00ff88"));
+        title.setTypeface(Typeface.DEFAULT_BOLD); title.setGravity(Gravity.CENTER); title.setPadding(0, 0, 0, 10);
         hist.addView(title);
-
-        historyContainer = new LinearLayout(this);
-        historyContainer.setOrientation(LinearLayout.VERTICAL);
-        hist.addView(historyContainer);
-
+        graphBar = new LinearLayout(this);
+        graphBar.setOrientation(LinearLayout.HORIZONTAL); graphBar.setGravity(Gravity.BOTTOM);
+        graphBar.setPadding(0, 0, 0, 15);
+        graphBar.setLayoutParams(new LinearLayout.LayoutParams(-1, 150));
+        hist.addView(graphBar);
+        LinearLayout listContainer = new LinearLayout(this);
+        listContainer.setOrientation(LinearLayout.VERTICAL); listContainer.setTag("list"); listContainer.setGravity(Gravity.CENTER_HORIZONTAL);
+        hist.addView(listContainer);
         sv.addView(hist);
         LinearLayout wrapper = new LinearLayout(this);
+        wrapper.setGravity(Gravity.CENTER_HORIZONTAL);
         wrapper.addView(sv);
         return wrapper;
     }
 
-    private LinearLayout createSettingsTab() {
-        ScrollView sv = new ScrollView(this);
-        LinearLayout sett = new LinearLayout(this);
-        sett.setOrientation(LinearLayout.VERTICAL);
-        sett.setPadding(20, 20, 20, 20);
-        sett.setBackgroundColor(bgColor);
-
-        TextView title = new TextView(this);
-        title.setText("Settings");
-        title.setTextSize(20);
-        title.setTextColor(primaryColor);
-        title.setTypeface(Typeface.DEFAULT_BOLD);
-        title.setGravity(Gravity.CENTER);
-        title.setPadding(0, 0, 0, 20);
-        sett.addView(title);
-
-        // Alarm toggle
-        LinearLayout alarmRow = settingRow("Alarm");
-        alarmToggle = new ToggleButton(this);
-        alarmToggle.setChecked(alarmEnabled);
-        alarmToggle.setTextOn("ON");
-        alarmToggle.setTextOff("OFF");
-        alarmToggle.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
-            public void onCheckedChanged(CompoundButton b, boolean c) {
-                alarmEnabled = c;
-                saveSettings();
-            }
-        });
-        alarmRow.addView(alarmToggle);
-        sett.addView(alarmRow);
-
-        // Theme toggle
-        LinearLayout themeRow = settingRow("Dark Theme");
-        themeToggle = new ToggleButton(this);
-        themeToggle.setChecked(isDarkTheme);
-        themeToggle.setTextOn("ON");
-        themeToggle.setTextOff("OFF");
-        themeToggle.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
-            public void onCheckedChanged(CompoundButton b, boolean c) {
-                isDarkTheme = c;
-                prefs.edit().putBoolean("dark", isDarkTheme).commit();
-                applyTheme();
-                recreate();
-            }
-        });
-        themeRow.addView(themeToggle);
-        sett.addView(themeRow);
-
-        // About
-        sett.addView(sectionLabel("About"));
-        TextView about = new TextView(this);
-        about.setText("MRX BatteryGuard v2.0\nSmart battery charging monitor\n\nMonitors battery level and alerts\nyou when target charge is reached.");
-        about.setTextSize(13);
-        about.setTextColor(textSecondary);
-        about.setPadding(10, 10, 10, 10);
-        sett.addView(about);
-
-        sv.addView(sett);
-        LinearLayout wrapper = new LinearLayout(this);
-        wrapper.addView(sv);
-        return wrapper;
-    }
-
-    private LinearLayout settingRow(String label) {
-        LinearLayout row = new LinearLayout(this);
-        row.setOrientation(LinearLayout.HORIZONTAL);
-        row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setPadding(15, 12, 15, 12);
+    private void updateAlarmPill() {
+        if (alarmStatusText == null) return;
+        View pill = (View) alarmStatusText.getParent();
+        if (pill == null) return;
         GradientDrawable bg = new GradientDrawable();
-        bg.setColor(cardBg);
-        bg.setCornerRadius(12);
-        row.setBackground(bg);
-        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        p.setMargins(0, 0, 0, 10);
-        row.setLayoutParams(p);
-
-        TextView tv = new TextView(this);
-        tv.setText(label);
-        tv.setTextSize(15);
-        tv.setTextColor(textColor);
-        tv.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        row.addView(tv);
-        return row;
+        bg.setColor(alarmEnabled ? Color.parseColor("#00ff88") : Color.parseColor("#1a1a2e"));
+        bg.setCornerRadius(40); bg.setStroke(2, Color.parseColor("#00ff88"));
+        pill.setBackground(bg);
+        alarmStatusText.setText(alarmEnabled ? "🔔 ALARM ON" : "🔕 ALARM OFF");
     }
 
-    private void refreshHistoryTab() {
-        if (historyContainer == null) return;
-        historyContainer.removeAllViews();
-        if (history.isEmpty()) {
-            TextView tv = new TextView(this);
-            tv.setText("No data yet...");
-            tv.setTextSize(14);
-            tv.setTextColor(textSecondary);
-            tv.setGravity(Gravity.CENTER);
-            tv.setPadding(0, 40, 0, 0);
-            historyContainer.addView(tv);
-            return;
-        }
-        int count = Math.min(history.size(), 30);
-        for (int i = 0; i < count; i++) {
-            TextView tv = new TextView(this);
-            tv.setText((String)history.get(i));
-            tv.setTextSize(12);
-            tv.setTextColor(textSecondary);
-            tv.setPadding(8, 6, 8, 6);
-            GradientDrawable bg = new GradientDrawable();
-            bg.setColor(cardBg);
-            bg.setCornerRadius(8);
-            tv.setBackground(bg);
-            LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            p.setMargins(0, 0, 0, 4);
-            tv.setLayoutParams(p);
-            historyContainer.addView(tv);
-        }
-    }
-
-    private TextView sectionLabel(String text) {
-        TextView label = new TextView(this);
-        label.setText(text);
-        label.setTextSize(13);
-        label.setTextColor(primaryColor);
-        label.setTypeface(Typeface.DEFAULT_BOLD);
-        label.setPadding(0, 12, 0, 6);
-        return label;
-    }
-
-    private LinearLayout card() {
-        LinearLayout card = new LinearLayout(this);
-        card.setOrientation(LinearLayout.VERTICAL);
-        card.setPadding(15, 12, 15, 12);
-        GradientDrawable bg = new GradientDrawable();
-        bg.setColor(cardBg);
-        bg.setCornerRadius(18);
-        bg.setStroke(1, cardBorder);
-        card.setBackground(bg);
-        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        p.setMargins(0, 5, 0, 8);
-        card.setLayoutParams(p);
-        return card;
-    }
-
-    private LinearLayout statCard(String title, String value) {
-        LinearLayout c = new LinearLayout(this);
-        c.setOrientation(LinearLayout.VERTICAL);
-        c.setPadding(12, 12, 12, 12);
-        c.setGravity(Gravity.CENTER);
-        GradientDrawable bg = new GradientDrawable();
-        bg.setColor(cardBg);
-        bg.setCornerRadius(14);
-        bg.setStroke(1, cardBorder);
-        c.setBackground(bg);
-
-        TextView tvTitle = new TextView(this);
-        tvTitle.setText(title);
-        tvTitle.setTextSize(11);
-        tvTitle.setTextColor(textSecondary);
-        tvTitle.setGravity(Gravity.CENTER);
-        c.addView(tvTitle);
-
-        TextView tvValue = new TextView(this);
-        tvValue.setText(value);
-        tvValue.setTextSize(20);
-        tvValue.setTextColor(primaryColor);
-        tvValue.setTypeface(Typeface.DEFAULT_BOLD);
-        tvValue.setGravity(Gravity.CENTER);
-        tvValue.setPadding(0, 4, 0, 0);
-        c.addView(tvValue);
-
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-        lp.setMargins(4, 0, 4, 0);
-        c.setLayoutParams(lp);
-        return c;
-    }
-
-    private Button smallBtn(String text) {
+    private Button circleBtn(String text) {
         Button btn = new Button(this);
-        btn.setText(text);
-        btn.setTextSize(18);
-        btn.setTextColor(primaryColor);
-        btn.setBackgroundColor(cardBg);
+        btn.setText(text); btn.setTextSize(18); btn.setTextColor(Color.parseColor("#00ff88"));
         GradientDrawable bg = new GradientDrawable();
-        bg.setColor(cardBg);
-        bg.setStroke(2, primaryColor);
-        bg.setCornerRadius(25);
+        bg.setShape(GradientDrawable.OVAL); bg.setColor(Color.parseColor("#0d0d18")); bg.setStroke(2, Color.parseColor("#00ff88"));
         btn.setBackground(bg);
         btn.setLayoutParams(new LinearLayout.LayoutParams(55, 55));
         return btn;
     }
 
-    private Button bigButton(String text, String colorStr) {
-        Button btn = new Button(this);
-        btn.setText(text);
-        btn.setTextSize(15);
-        btn.setTextColor(Color.WHITE);
-        btn.setTypeface(Typeface.DEFAULT_BOLD);
-        GradientDrawable bg = new GradientDrawable();
-        bg.setColor(Color.parseColor(colorStr));
-        bg.setCornerRadius(25);
-        btn.setBackground(bg);
-        btn.setPadding(0, 16, 0, 16);
-        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        p.setMargins(0, 5, 0, 5);
-        btn.setLayoutParams(p);
-        return btn;
+    private void refreshHistoryTab() {
+        LinearLayout list = (LinearLayout) findViewByTag(historyContent, "list");
+        if (list == null) return;
+        list.removeAllViews();
+        if (graphBar != null) {
+            graphBar.removeAllViews();
+            int max = 0;
+            for (int i = 0; i < levelHistory.size(); i++) { int l = ((Integer) levelHistory.get(i)).intValue(); if (l > max) max = l; }
+            if (max == 0) max = 100;
+            int count = Math.min(levelHistory.size(), 30);
+            int start = levelHistory.size() - count;
+            for (int i = start; i < levelHistory.size(); i++) {
+                int l = ((Integer) levelHistory.get(i)).intValue();
+                View bar = new View(this);
+                int h = (int) (120 * l / (float) max);
+                bar.setLayoutParams(new LinearLayout.LayoutParams(8, h > 2 ? h : 2));
+                if (l >= chargingLimit) bar.setBackgroundColor(Color.parseColor("#ff3344"));
+                else if (l >= 80) bar.setBackgroundColor(Color.parseColor("#ffdd00"));
+                else bar.setBackgroundColor(Color.parseColor("#00ff88"));
+                graphBar.addView(bar);
+            }
+        }
+        if (history.isEmpty()) {
+            TextView tv = new TextView(this);
+            tv.setText("No data yet"); tv.setTextSize(12); tv.setTextColor(Color.parseColor("#335544"));
+            tv.setGravity(Gravity.CENTER); tv.setPadding(0, 20, 0, 0);
+            list.addView(tv); return;
+        }
+        int show = Math.min(history.size(), 20);
+        for (int i = 0; i < show; i++) {
+            TextView tv = new TextView(this);
+            tv.setText("▸ " + (String) history.get(i));
+            tv.setTextSize(11); tv.setTextColor(Color.parseColor("#558866")); tv.setPadding(4, 4, 4, 4); tv.setGravity(Gravity.CENTER);
+            list.addView(tv);
+        }
+    }
+
+    private View findViewByTag(View parent, String tag) {
+        if (parent == null) return null;
+        if (tag.equals(parent.getTag())) return parent;
+        if (parent instanceof ViewGroup) {
+            ViewGroup vg = (ViewGroup) parent;
+            for (int i = 0; i < vg.getChildCount(); i++) {
+                View found = findViewByTag(vg.getChildAt(i), tag);
+                if (found != null) return found;
+            }
+        }
+        return null;
     }
 
     private void registerBatteryReceiver() {
-        BroadcastReceiver receiver = new BroadcastReceiver() {
+        registerReceiver(new BroadcastReceiver() {
             public void onReceive(Context c, Intent intent) {
                 int level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);
                 int scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1);
@@ -591,35 +388,22 @@ public class MainActivity extends Activity {
                 float temp = intent.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, 0) / 10f;
                 updateUI(currentLevel, isCharging, temp);
                 checkAlarm(currentLevel, isCharging);
-                addHistory(currentLevel, isCharging);
+                if (currentLevel != previousLevel) { addHistory(currentLevel, isCharging); previousLevel = currentLevel; }
             }
-        };
-        registerReceiver(receiver, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+        }, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
     }
 
     private void updateUI(int level, boolean charging, float temp) {
         if (batteryPercent == null) return;
         batteryPercent.setText(level + "%");
         int color;
-        if (charging) color = accentColor;
-        else if (level < 20) color = Color.parseColor("#ff4757");
-        else if (level < 50) color = Color.parseColor("#ffa502");
-        else color = primaryColor;
+        if (charging) color = Color.parseColor("#ffdd00");
+        else if (level < 20) color = Color.parseColor("#ff3344");
+        else if (level < 50) color = Color.parseColor("#ffa500");
+        else color = Color.parseColor("#00ff88");
         batteryPercent.setTextColor(color);
-        chargingStatus.setText(charging ? "Charging" : "Discharging");
-
-        if (tempCard != null && tempCard.getChildCount() > 1) {
-            ((TextView)tempCard.getChildAt(1)).setText(String.format("%.0f°C", temp));
-        }
-        if (avgCard != null && avgCard.getChildCount() > 1) {
-            int avg = 0;
-            if (!levelHistory.isEmpty()) {
-                for (int i = 0; i < levelHistory.size(); i++) avg += ((Integer)levelHistory.get(i)).intValue();
-                avg /= levelHistory.size();
-            }
-            ((TextView)avgCard.getChildAt(1)).setText(avg + "%");
-        }
-        if (lastChargeText != null) lastChargeText.setText("Updated: " + sdf.format(new Date()));
+        chargingStatus.setText(charging ? "CHARGING" : "IDLE");
+        if (lastChargeText != null) lastChargeText.setText(String.format("%.0f°C", temp));
     }
 
     private void checkAlarm(int level, boolean charging) {
@@ -629,46 +413,31 @@ public class MainActivity extends Activity {
 
     private void triggerAlarm(int level) {
         alarmActive = true;
-        try {
-            Uri alarmUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM);
-            ringtone = RingtoneManager.getRingtone(this, alarmUri);
-            if (ringtone != null) ringtone.play();
-        } catch (Exception e) {}
+        try { ringtone = RingtoneManager.getRingtone(this, RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)); if (ringtone != null) ringtone.play(); } catch (Exception e) {}
         if (vibrator != null) vibrator.vibrate(new long[]{0, 500, 200, 500}, 0);
-        NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-        Notification notif = new Notification.Builder(this)
-            .setContentTitle("MRX BatteryGuard Alarm!")
-            .setContentText("Battery reached " + level + "%!")
-            .setSmallIcon(android.R.drawable.ic_dialog_alert)
-            .setPriority(Notification.PRIORITY_HIGH)
-            .setAutoCancel(true)
-            .build();
-        nm.notify(1, notif);
-        new AlertDialog.Builder(this)
-            .setTitle("Target Reached!")
-            .setMessage("Battery at " + level + "%.\nUnplug charger.")
-            .setPositiveButton("STOP", new android.content.DialogInterface.OnClickListener() {
-                public void onClick(android.content.DialogInterface d, int w) { stopAlarm(); }
-            })
-            .setCancelable(false)
-            .show();
+        ((NotificationManager) getSystemService(NOTIFICATION_SERVICE)).notify(1, new Notification.Builder(this)
+            .setContentTitle("MRX BatteryGuard").setContentText("Battery at " + level + "%! Unplug.")
+            .setSmallIcon(android.R.drawable.ic_dialog_alert).setPriority(Notification.PRIORITY_HIGH).setAutoCancel(true).build());
+        new AlertDialog.Builder(this).setTitle("TARGET REACHED").setMessage("Battery: " + level + "%\n\nUnplug charger.")
+            .setPositiveButton("STOP", new android.content.DialogInterface.OnClickListener() { public void onClick(android.content.DialogInterface d, int w) { stopAlarm(); } })
+            .setCancelable(false).show();
     }
 
     private void stopAlarm() {
         alarmActive = false;
         if (ringtone != null) { ringtone.stop(); ringtone = null; }
         if (vibrator != null) vibrator.cancel();
-        ((NotificationManager)getSystemService(NOTIFICATION_SERVICE)).cancel(1);
+        ((NotificationManager) getSystemService(NOTIFICATION_SERVICE)).cancel(1);
     }
 
     private void addHistory(int level, boolean charging) {
         levelHistory.add(Integer.valueOf(level));
-        if (levelHistory.size() > 500) levelHistory.remove(0);
-        history.add(0, sdf.format(new Date()) + "  " + level + "%  " + (charging ? "Charging" : "Idle"));
+        if (levelHistory.size() > 200) levelHistory.remove(0);
+        history.add(0, sdf.format(new Date()) + " → " + level + "% " + (charging ? "⚡" : "🔋"));
         if (history.size() > 50) history.remove(history.size() - 1);
     }
 
     private void saveSettings() {
-        prefs.edit().putInt("limit", chargingLimit).putBoolean("alarm", alarmEnabled).putBoolean("dark", isDarkTheme).commit();
+        prefs.edit().putInt("limit", chargingLimit).putBoolean("alarm", alarmEnabled).commit();
     }
 }
