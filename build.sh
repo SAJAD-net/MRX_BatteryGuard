@@ -2,7 +2,7 @@
 cd ~/W/Personal/MRX_BatteryGuard
 
 echo "Cleaning..."
-rm -rf build/obj build/classes.dex build/app-final.apk build/MRX_BatteryGuard.apk
+rm -rf build/obj build/classes.dex build/app-unsigned.apk build/MRX_BatteryGuard.apk build/tmp
 mkdir -p build/obj
 
 echo "Generating R.java..."
@@ -25,19 +25,21 @@ echo "Dexing..."
 dalvik-exchange --dex --output=build/classes.dex build/obj
 
 echo "Packaging..."
+mkdir -p build/tmp
+cp build/classes.dex build/tmp/
 aapt package -f -M src/main/AndroidManifest.xml -S res \
   -I /usr/lib/android-sdk/platforms/android-23/android.jar \
-  -F build/app-final.apk
-
-echo "Adding dex..."
-aapt add build/app-final.apk build/classes.dex
+  -F build/app-unsigned.apk \
+  build/tmp
 
 echo "Signing..."
 jarsigner -keystore debug.keystore -storepass android -keypass android \
-  build/app-final.apk androiddebugkey
+  build/app-unsigned.apk androiddebugkey
 
 echo "Aligning..."
-zipalign -f 4 build/app-final.apk build/MRX_BatteryGuard.apk
+zipalign -f 4 build/app-unsigned.apk build/MRX_BatteryGuard.apk
 
-echo "DONE!"
-ls -la build/MRX_BatteryGuard.apk
+echo "Verifying..."
+aapt dump badging build/MRX_BatteryGuard.apk | head -5
+
+echo "DONE! APK size: $(ls -la build/MRX_BatteryGuard.apk | awk '{print $5}') bytes"
