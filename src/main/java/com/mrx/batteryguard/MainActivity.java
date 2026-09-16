@@ -385,6 +385,7 @@ public class MainActivity extends Activity {
                 if (scale > 0) currentLevel = (level * 100) / scale;
                 int status = intent.getIntExtra(BatteryManager.EXTRA_STATUS, -1);
                 isCharging = (status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL);
+                if (!isCharging && alarmActive) { stopAlarm(); }
                 float temp = intent.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, 0) / 10f;
                 updateUI(currentLevel, isCharging, temp);
                 checkAlarm(currentLevel, isCharging);

@@ -13,3 +13,7 @@ javac.*.args
 local.properties
 .gradle/
 build/
+mrx-release.keystore
+*.keystore
+*.jks
+MRX_BatteryGuard-release.apk
